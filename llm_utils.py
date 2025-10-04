@@ -73,6 +73,49 @@ def generate_comforting_message(user_emotion: str, content: dict) -> str:
         return "괜찮아요, 모든 게 다 잘 될 거예요. 오늘 하루도 정말 고생 많으셨어요."
 
 
+# 🔹 캐릭터별 응답 생성 함수
+def generate_character_response(character: str, user_emotion: str, content: dict) -> str:
+    """
+    캐릭터 말투를 반영한 위로 메시지를 생성합니다.
+    """
+    from prompt.characters import get_character_prompt
+
+    # 콘텐츠 정보 추출
+    if "error" in content:
+        content_description = "추천할 콘텐츠가 없어요."
+    else:
+        content_type = list(content.keys())[0]
+        content_name = content[content_type]
+        content_description = f"{content_name} ({content_type})"
+
+    # 캐릭터 프롬프트 가져오기
+    character_prompt = get_character_prompt(character)
+
+    # 전체 프롬프트 구성
+    system_prompt = character_prompt
+    user_prompt = f"""
+    사용자는 현재 '{user_emotion}'의 감정을 느끼고 있습니다.
+    당신의 캐릭터에 맞는 말투로 사용자를 따뜻하게 위로하고,
+    '{content_description}'을(를) 추천해주세요.
+
+    캐릭터의 특징을 잘 살려서 자연스럽고 진정성 있는 메시지를 작성해주세요.
+    응답은 한국어로 3-5문장 정도로 작성해주세요.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"캐릭터 응답 생성 중 오류 발생: {e}")
+        return "괜찮아요, 모든 게 다 잘 될 거예요. 오늘 하루도 정말 고생 많으셨어요."
+
+
 # 🔹 간단 응답 함수
 def get_llm_answer(user_sentence: str) -> str:
     try:
