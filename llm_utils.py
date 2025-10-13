@@ -1,6 +1,7 @@
 # llm_utils.py
 import os
 from openai import OpenAI
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 # ✅ .env 불러오기
@@ -11,18 +12,26 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("❌ OPENAI_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
 
+google_api_key = os.getenv("GOOGLE_API_KEY")
+if not google_api_key:
+    raise ValueError("❌ GOOGLE_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
+
 # ✅ OpenAI 클라이언트 초기화
 client = OpenAI(api_key=api_key)
 
+# ✅ Google AI 초기화
+genai.configure(api_key=google_api_key)
 
-# 🔹 임베딩 함수
-def get_embedding(text, model="text-embedding-3-small"):
+
+# 🔹 임베딩 함수 (Google 임베딩 사용 - 벡터 DB와 동일한 모델)
+def get_embedding(text):
     try:
-        response = client.embeddings.create(
-            model=model,
-            input=text
+        result = genai.embed_content(
+            model="models/text-embedding-004",
+            content=text,
+            task_type="RETRIEVAL_QUERY"
         )
-        return response.data[0].embedding
+        return result['embedding']
     except Exception as e:
         print(f"임베딩 생성 중 오류 발생: {e}")
         return None
