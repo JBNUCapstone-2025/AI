@@ -1,9 +1,16 @@
 # rag_recommender.py
 import random
+import os
+import sys
 from typing import Dict, List
-from llm_utils import get_embedding
-from vector_db import find_dissimilar_emotion_key
-from recommendation_data import get_recommendation_data
+
+# 프로젝트 루트를 sys.path에 추가
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, BASE_DIR)
+
+from ai_core.llm.llm_utils import get_embedding
+from ai_core.vector_db.vector_db import find_dissimilar_emotion_key
+from data.recommendation_data import get_recommendation_data
 
 def get_rag_recommendation(conversation_history: str, category: str) -> Dict:
     """

@@ -2,9 +2,16 @@
 # 의미 기반 콘텐츠 추천 시스템
 
 import numpy as np
+import os
+import sys
 from typing import List, Dict
-from llm_utils import get_embedding
-from recommendation_data import get_recommendation_data
+
+# 프로젝트 루트를 sys.path에 추가
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, BASE_DIR)
+
+from ai_core.llm.llm_utils import get_embedding
+from data.recommendation_data import get_recommendation_data
 
 
 def calculate_cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:

@@ -2,11 +2,16 @@ import pickle
 import random
 import numpy as np
 import faiss
+import os
+
+# 데이터 파일 경로 설정
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 # Faiss 인덱스와 감정 데이터 로드
 try:
-    index = faiss.read_index("vector_db.faiss")
-    with open("emotion_data.pkl", "rb") as f:
+    index = faiss.read_index(os.path.join(DATA_DIR, "vector_db.faiss"))
+    with open(os.path.join(DATA_DIR, "emotion_data.pkl"), "rb") as f:
         db_data = pickle.load(f)
     
     EMOTIONS = db_data["emotions"]

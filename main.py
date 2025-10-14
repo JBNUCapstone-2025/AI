@@ -3,16 +3,31 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-# ✅ llm_utils에서 함수 가져오기
-from llm_utils import extract_emotion, extract_recent_emotion, get_embedding, generate_character_response, generate_empathetic_response
-from vector_db import find_dissimilar_emotion_key, get_random_content
-from rag_recommender import get_rag_recommendation, format_recommendation
+# ✅ AI 핵심 기능 import (정리된 구조)
+from ai_core.llm import (
+    extract_emotion,
+    extract_recent_emotion,
+    get_embedding,
+    generate_empathetic_response,
+    generate_recommendation_response
+)
+from ai_core.vector_db import find_dissimilar_emotion_key
+from ai_core.recommendation import format_recommendation
 
-app = FastAPI()
+# Backend 기능 import
+from app.api import auth, diary
+
+app = FastAPI(
+    title="ICSYF AI Integrated API",
+    description="감정 기반 정서 관리 플랫폼 통합 API (AI + Backend)",
+    version="2.0.0"
+)
 
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +36,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Backend API 라우터 등록
+app.include_router(auth.router)
+app.include_router(diary.router)
 
 class ChatRequest(BaseModel):
     sentence: str
@@ -84,7 +103,7 @@ async def recommend(request: RecommendRequest):
         opposite_emotion = find_dissimilar_emotion_key(emotion_vector)
 
     # 3. 의미 기반 스마트 추천
-    from content_recommender import get_smart_recommendation
+    from ai_core.recommendation import get_smart_recommendation
 
     # 대화 내용과 가장 관련성 높은 콘텐츠 추천
     selected = get_smart_recommendation(
@@ -112,7 +131,6 @@ async def recommend(request: RecommendRequest):
     formatted_rec = format_recommendation(request.type, recommendation_data)
 
     # 5. 캐릭터 말투로 추천 메시지 생성
-    from llm_utils import generate_recommendation_response
 
     answer = generate_recommendation_response(
         character=request.character,
@@ -146,7 +164,7 @@ async def analyze_diary(request: DiaryRequest):
     opposite_emotion = find_dissimilar_emotion_key(emotion_vector)
 
     # 3. 의미 기반 스마트 추천
-    from content_recommender import get_smart_recommendation
+    from ai_core.recommendation import get_smart_recommendation
 
     # 일기 내용과 가장 관련성 높은 콘텐츠 추천
     selected_books = get_smart_recommendation(
@@ -193,4 +211,14 @@ async def analyze_diary(request: DiaryRequest):
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World"}
+    return {
+        "message": "✅ ICSYF AI 통합 서버가 성공적으로 실행되었습니다!",
+        "version": "2.0.0",
+        "features": [
+            "AI 챗봇 (감정 분석 + 캐릭터 대화)",
+            "AI 추천 시스템 (도서, 음악, 식사)",
+            "사용자 인증 (회원가입, 로그인)",
+            "다이어리 관리 (작성, 조회, 수정, 삭제)",
+            "AI 일기 분석 및 추천"
+        ]
+    }
