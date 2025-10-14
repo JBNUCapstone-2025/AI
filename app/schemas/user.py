@@ -51,6 +51,7 @@ class UserResponse(BaseModel):
     create_date: datetime
     update_date: datetime
     emotion: Optional[Dict] = None
+    character: Optional[str] = None  # 선택한 캐릭터
     role: RoleEnum
 
     class Config:
@@ -61,3 +62,16 @@ class UserResponse(BaseModel):
 class UserSignupResponse(BaseModel):
     message: str = Field(default="회원가입이 완료되었습니다")
     user: UserResponse
+
+
+# 캐릭터 업데이트 요청 스키마
+class CharacterUpdateRequest(BaseModel):
+    character: str = Field(..., description="선택한 캐릭터 (dog, cat, bear, rabbit, racoon, hamster)")
+
+    @field_validator('character')
+    @classmethod
+    def validate_character(cls, v):
+        valid_characters = ["dog", "cat", "bear", "rabbit", "racoon", "hamster"]
+        if v not in valid_characters:
+            raise ValueError(f'캐릭터는 {", ".join(valid_characters)} 중 하나여야 합니다')
+        return v

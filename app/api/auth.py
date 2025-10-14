@@ -1,11 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.schemas.user import UserSignupRequest, UserSignupResponse, UserLoginRequest, UserLoginResponse
+from app.schemas.user import (
+    UserSignupRequest, UserSignupResponse, UserLoginRequest, UserLoginResponse,
+    CharacterUpdateRequest, UserResponse
+)
 from app.crud.user import create_user, get_user_by_username, get_user_by_email, get_user_by_nickname
-from app.services.auth import verify_password, create_access_token
+from app.services.auth import verify_password, create_access_token, verify_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+security = HTTPBearer()
 
 
 @router.post("/signup", response_model=UserSignupResponse, status_code=status.HTTP_201_CREATED)
@@ -66,3 +71,45 @@ def login(user_login: UserLoginRequest, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": user
     }
+
+
+def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> int:
+    """JWT 토큰에서 현재 사용자 ID 추출"""
+    token = credentials.credentials
+    payload = verify_token(token)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않거나 만료된 토큰입니다"
+        )
+    user_id = payload.get("userId")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰 페이로드가 유효하지 않습니다"
+        )
+    return user_id
+
+
+@router.patch("/character", response_model=UserResponse)
+def update_character(
+    character_data: CharacterUpdateRequest,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """사용자의 캐릭터 업데이트"""
+    from app.db.models import User
+    user = db.query(User).filter(User.user_id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="사용자를 찾을 수 없습니다"
+        )
+
+    # 캐릭터 업데이트
+    user.character = character_data.character
+    db.commit()
+    db.refresh(user)
+
+    return user
