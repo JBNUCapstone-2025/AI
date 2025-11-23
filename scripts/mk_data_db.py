@@ -1,94 +1,80 @@
 import os
-import pickle
-import numpy as np
-import faiss
-import google.generativeai as genai
-from dotenv import load_dotenv
+import json 
+from langchain_core.documents import Document
+from langchain_community.vectorstores import FAISS
+from ai_core.llm.llm_utils import embedding_model
 
-# API 키 설정
-load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# 벡터db 생성 및 저장
 
-# 벡터화할 감정 키와 추천 콘텐츠 데이터
-EMOTION_DATA = {
-    "행복": {
-        "movies": ["이터널 선샤인", "어바웃 타임", "라라랜드"],
-        "music": ["Pharrell Williams - Happy", "아이유 - Blueming"],
-        "books": ["어린 왕자", "데일 카네기 인간관계론"]
-    },
-    "슬픔": {
-        "movies": ["조제, 호랑이 그리고 물고기들", "캐롤", "맨체스터 바이 더 씨"],
-        "music": ["Adele - Someone Like You", "김광석 - 서른 즈음에"],
-        "books": ["상실의 시대", "1984"]
-    },
-    "분노": {
-        "movies": ["달콤한 인생", "존 윅", "악마를 보았다"],
-        "music": ["Rage Against The Machine - Killing In The Name", "에픽하이 - Born Hater"],
-        "books": ["정의란 무엇인가", "총, 균, 쇠"]
-    },
-    "평온": {
-        "movies": ["리틀 포레스트", "패터슨", "원스"],
-        "music": ["Debussy - Clair de Lune", "Norah Jones - Don't Know Why"],
-        "books": ["월든", "느리게 사는 즐거움"]
-    },
-    "불안": {
-        "movies": ["버드맨", "블랙 스완", "더 파더"],
-        "music": ["Radiohead - Creep", "검정치마 - Antifreeze"],
-        "books": ["변신", "인간 실격"]
-    }
-}
 
-def get_embedding(text):
-    """텍스트를 임베딩 벡터로 변환합니다."""
-    try:
-        result = genai.embed_content(
-            model="models/text-embedding-004",
-            content=text,
-            task_type="RETRIEVAL_DOCUMENT"
-        )
-        return result['embedding']
-    except Exception as e:
-        print(f"임베딩 생성 중 오류 발생: {e}")
-        return None
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
-def create_vector_db():
-    """감정 데이터를 기반으로 Faiss 벡터 DB를 생성하고 저장합니다."""
-    emotions = list(EMOTION_DATA.keys())
-    vectors = []
-    valid_emotions = []
+JSON_DIR = os.path.join(BASE_DIR, "data2")
+VECTORDB_DIR = os.path.join(BASE_DIR, "ai_core", "vector_db", "emotion_vectordb")
 
-    print("감정 키를 벡터화하는 중...")
-    for emotion in emotions:
-        embedding = get_embedding(emotion)
-        if embedding:
-            vectors.append(embedding)
-            valid_emotions.append(emotion)
-        else:
-            print(f"'{emotion}'을(를) 벡터화하지 못했습니다.")
+def load_book_docs_from_dir(directory: str) -> list[Document]:
+    docs = []
 
-    if not vectors:
-        print("벡터화할 데이터가 없습니다. API 키 또는 네트워크를 확인하세요.")
-        return
+    # 디렉토리 안의 모든 파일 확인
+    for filename in os.listdir(directory):
+        if filename.endswith(".json"):
+            full_path = os.path.join(directory, filename)
 
-    dimension = len(vectors[0])
-    vector_matrix = np.array(vectors).astype('float32')
+            # 파일명에서 emotion_group 추출 (예: anger.json → anger)
+            emotion_group = os.path.splitext(filename)[0]
 
-    # Faiss 인덱스 생성 (L2 정규화 및 IndexFlatIP 사용)
-    faiss.normalize_L2(vector_matrix)
-    index = faiss.IndexFlatIP(dimension)
-    index.add(vector_matrix)
+            with open(full_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
 
-    print(f"Faiss 인덱스 생성 완료. {index.ntotal}개의 벡터가 추가되었습니다.")
+            for item in raw:
+                tags = ", ".join(item.get("tags", []))
 
-    # 인덱스 및 데이터 저장
-    faiss.write_index(index, "vector_db.faiss")
-    with open("emotion_data.pkl", "wb") as f:
-        pickle.dump({
-            "emotions": valid_emotions,
-            "data": EMOTION_DATA
-        }, f)
+                page_content = f"""
+                제목: {item["title"]}
+                부제: {item.get("subtitle", "")}
+                저자: {item["author"]}
+                출판사: {item["publisher"]}
+                키워드/태그: {tags}
+                출간일: {item["pub_date"]}
+                가격: {item["price"]}
+                상세보기: {item["detail_url"]}
+                """.strip()
 
-    print("벡터 DB 파일(vector_db.faiss) 및 데이터 파일(emotion_data.pkl)이 성공적으로 저장되었습니다.")
+                docs.append(
+                    Document(
+                        page_content=page_content,
+                        metadata={
+                            "product_id": item["product_id"],
+                            "title": item["title"],
+                            "author": item["author"],
+                            "publisher": item["publisher"],
+                            "subtitle": item.get("subtitle", ""),
+                            "detail_url": item["detail_url"],
+                            "tags": item.get("tags", []),
+                            "emotion_group": emotion_group,  # ⭐ 추가된 부분
+                        },
+                    )
+                )
+
+    return docs
+
+def build_vectordb(docs):
+
+    # VectorDB 생성
+    vectordb = FAISS.from_documents(docs, embedding_model)
+    vectordb.save_local(VECTORDB_DIR)
+    print(f"VectorDB 생성 완료: {VECTORDB_DIR}")
+    
+    return vectordb
 
 if __name__ == "__main__":
-    create_vector_db()
+    # json 파일을 document 형식으로 변환 
+    # # [Document(metadata={'product_id', 'title','detail_url', 'tags': [], 'emotion_group'}, page_content='제목, 저자, 출판사, 키워드/태그,출간일,가격, 상세보기)]
+    docs = load_book_docs_from_dir(JSON_DIR) 
+
+    print("📌 DEBUG: docs count =", len(docs))
+    if len(docs) > 0:
+        print("📌 DEBUG: sample doc =", docs[0])
+    vectordb = build_vectordb(docs)
+
+    

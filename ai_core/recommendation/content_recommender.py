@@ -95,7 +95,11 @@ def rank_contents_by_similarity(
     # 상위 K개 반환
     return [content for content, score in scored_contents[:top_k]]
 
-
+# main.py
+# user_text : conversation
+# emotion : recent_emotion
+# category : request.type (도서, 음악, 음식)
+# top_k : 몇개의 콘텐츠 
 def get_smart_recommendation(
     user_text: str,
     emotion: str,

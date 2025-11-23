@@ -5,13 +5,18 @@ import sys
 from typing import Dict, List
 
 # 프로젝트 루트를 sys.path에 추가
+# os.path.abspath(_file_) : 이 파일의 절대 경로를 구함.
+# os.path.dirname() : 파일 경로에서 상위 폴더 경로만 추출
+# 프로젝트의 루트 폴더 의미 -> os.path.dirname() 3번 썼기 때문
+# /home/user/project
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 파이썬이 모듈을 import할 때 검색하는 경로 목록
+# BASE_DIR을 맨 앞(index 0)에 추가하면, python이 import할 때 프로젝트 루트부터 먼저 검색함.
 sys.path.insert(0, BASE_DIR)
 
-from ai_core.llm.llm_utils import get_embedding
-from ai_core.vector_db.vector_db import find_dissimilar_emotion_key
-from data.recommendation_data import get_recommendation_data
-
+#from ai_core.llm.llm_utils import get_embedding
+#from data.recommendation_data import get_recommendation_data
+'''
 def get_rag_recommendation(conversation_history: str, category: str) -> Dict:
     """
     대화 기록을 분석하여 RAG 기반으로 추천을 제공합니다.
@@ -63,14 +68,15 @@ def get_rag_recommendation(conversation_history: str, category: str) -> Dict:
         "recommendation": selected,
         "all_recommendations": recommendations[:3]  # 상위 3개 반환
     }
+'''
 
-
+# 도서 
 def format_book_recommendation(data: Dict) -> str:
     """도서 추천 정보를 포맷팅합니다."""
     rec = data["recommendation"]
-    title = rec.get("title", "")
-    author = rec.get("author", "")
-    description = rec.get("description", "")
+    title = rec.metadata.get("title", "")
+    author = rec.metadata.get("author", "")
+    description = rec.page_content if hasattr(rec, "page_content") else ""
 
     result = f"📚 {title}"
     if author:
@@ -82,7 +88,9 @@ def format_book_recommendation(data: Dict) -> str:
     if "all_recommendations" in data and len(data["all_recommendations"]) > 1:
         result += "\n\n다른 추천도서:"
         for book in data["all_recommendations"][1:]:
-            result += f"\n• {book.get('title', '')} - {book.get('author', '')}"
+            b_title = book.metadata.get("title", "") if hasattr(book,"metadata") else ""
+            b_author = book.metadata.get("author","") if hasattr(book, "metadata") else ""
+            result += f"\n {b_title} - {b_author}"
 
     return result
 
@@ -130,7 +138,8 @@ def format_food_recommendation(data: Dict) -> str:
 
     return result
 
-
+# main.py 
+# 도서, {}
 def format_recommendation(category: str, data: Dict) -> str:
     """카테고리에 따라 추천 정보를 포맷팅합니다."""
     if "error" in data:
@@ -142,6 +151,7 @@ def format_recommendation(category: str, data: Dict) -> str:
         "식사": format_food_recommendation
     }
 
+    # 도서 
     formatter = formatters.get(category)
     if formatter:
         return formatter(data)

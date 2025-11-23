@@ -6,10 +6,9 @@
 """
 
 from .content_recommender import get_smart_recommendation
-from .rag_recommender import get_rag_recommendation, format_recommendation
+from .rag_recommender import format_recommendation
 
 __all__ = [
     'get_smart_recommendation',
-    'get_rag_recommendation',
     'format_recommendation'
 ]

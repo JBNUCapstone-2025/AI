@@ -11,7 +11,7 @@ from ai_core.llm import (
     generate_empathetic_response,
     generate_recommendation_response
 )
-from ai_core.vector_db import find_dissimilar_emotion_key
+from ai_core.vector_db import get_recommendation_by_emotion
 from ai_core.recommendation import format_recommendation
 
 # Backend 기능 import
@@ -44,6 +44,8 @@ app.include_router(diary.router)
 class ChatRequest(BaseModel):
     sentence: str
     character: str = "강아지"  # 기본값은 강아지
+    conversation_history: list[dict[str, str]] = [] # 이전 대화
+
 
 class RecommendRequest(BaseModel):
     type: str  # 도서, 음악, 식사
@@ -63,24 +65,49 @@ async def chat(request: ChatRequest):
     4. 반대 감정 기반 콘텐츠 추천
     5. 캐릭터 말투로 응답 생성
     """
-    # 1. 감정 추출
+    # 멀티턴 구현
+
+    # sentence, character, conversation_hisotry
+
+    # request.conversation_history(이전 대화 기록) 있으면 해당 기록 사용
+    # 없으면 빈 리스트
+    if request.conversation_history:
+        chat_history = request.conversation_history
+    else:
+        chat_history = []
+    
+    '''
+    for i in chat_history:
+        if i['role'] == 'user':
+            full_conversation = " ".join(i['content'])
+    '''
+
+    # 1. 감정 추출 (llm_utils.py)
     emotion = extract_emotion(request.sentence)
 
-    # 2. 공감 기능 강화 - 먼저 사용자의 감정에 공감
+    # 현재 사용자의 질문 chat_history에 저장 
+    chat_history.append({"role" : "user", "content":request.sentence})
+
+    # 2. 공감 기능 강화 - 먼저 사용자의 감정에 공감 (llm_utils.py)
     empathy_response = generate_empathetic_response(
         character=request.character,
         user_sentence=request.sentence,
-        user_emotion=emotion
+        user_emotion=emotion,
+        chat_history = chat_history
     )
+
+    # assistant의 문장 chat_history에 저장
+    chat_history.append({"role" : "assistant", "content": empathy_response})
 
     return {
         "answer": empathy_response,
-        "detected_emotion": emotion
+        "detected_emotion": emotion,
+        "conversation_history" : chat_history
     }
 
 
 @app.post("/api/recommend")
-async def recommend(request: RecommendRequest):
+async def recommend(request: RecommendRequest): 
     """
     RAG 기반 지능형 추천 시스템
     1. 전체 대화 기록에서 최근 감정 분석
@@ -88,50 +115,38 @@ async def recommend(request: RecommendRequest):
     3. 대화 내용과 가장 관련성 높은 콘텐츠 추천
     4. 캐릭터 말투로 응답 생성
     """
+
+    
     # 1. 전체 대화에서 최근 감정 추출
     conversation = request.conversation_history or "평범한 하루"
 
-    # 최근 감정 추출 (여러 감정이 있을 경우 가장 최근 것 선택)
+    # 최근 감정 추출 (여러 감정이 있을 경우 가장 최근 것 선택) (llm_utils.py)
     recent_emotion = extract_recent_emotion(conversation)
 
-    # 2. 감정 임베딩 생성 후 벡터 DB에서 반대 감정 찾기
-    emotion_vector = get_embedding(recent_emotion)
-    if emotion_vector is None:
-        # fallback
-        opposite_emotion = "평온"
-    else:
-        opposite_emotion = find_dissimilar_emotion_key(emotion_vector)
+    # rag
+    # 기분과 대화에 따른 추천 (3개)(vector_db.py)
 
-    # 3. 의미 기반 스마트 추천
-    from ai_core.recommendation import get_smart_recommendation
-
-    # 대화 내용과 가장 관련성 높은 콘텐츠 추천
-    selected = get_smart_recommendation(
-        user_text=conversation,
-        emotion=opposite_emotion,
-        category=request.type,
-        top_k=3
-    )
+    selected = get_recommendation_by_emotion(recent_emotion, conversation, k=3)
 
     if not selected:
         return {
             "answer": f"{request.type} 추천 데이터가 없습니다.",
             "recommendation_data": {"error": "데이터 없음"}
         }
-
+    
     recommendation_data = {
         "category": request.type,
         "current_emotion": recent_emotion,
-        "recommended_emotion": opposite_emotion,
-        "recommendation": selected[0] if selected else {},
-        "all_recommendations": selected
+        "recommended_emotion": recent_emotion,
+        "recommendation": selected[0],
+        "all_recommendations": selected,
     }
 
     # 4. 추천 정보 포맷팅
+    # ex) 도서, recommendation_data
     formatted_rec = format_recommendation(request.type, recommendation_data)
 
     # 5. 캐릭터 말투로 추천 메시지 생성
-
     answer = generate_recommendation_response(
         character=request.character,
         category=request.type,
@@ -141,6 +156,8 @@ async def recommend(request: RecommendRequest):
 
     return {
         "answer": answer,
+        # 검색한 전체 3개 
+        # 1개 -> selected[0]
         "recommendation_data": recommendation_data
     }
 
@@ -153,6 +170,7 @@ async def analyze_diary(request: DiaryRequest):
     2. 감정 벡터를 만들어 반대 감정 찾기
     3. 일기 내용과 가장 관련성 높은 콘텐츠를 의미 기반으로 추천
     """
+
     # 1. 감정 추출
     emotion = extract_emotion(request.diary)
 
@@ -161,7 +179,7 @@ async def analyze_diary(request: DiaryRequest):
     if emotion_vector is None:
         return {"error": "감정 분석에 실패했습니다."}
 
-    opposite_emotion = find_dissimilar_emotion_key(emotion_vector)
+    # opposite_emotion = find_dissimilar_emotion_key(emotion_vector)
 
     # 3. 의미 기반 스마트 추천
     from ai_core.recommendation import get_smart_recommendation
@@ -169,21 +187,21 @@ async def analyze_diary(request: DiaryRequest):
     # 일기 내용과 가장 관련성 높은 콘텐츠 추천
     selected_books = get_smart_recommendation(
         user_text=request.diary,
-        emotion=opposite_emotion,
+        emotion=emotion,
         category="도서",
         top_k=2
     )
 
     selected_music = get_smart_recommendation(
         user_text=request.diary,
-        emotion=opposite_emotion,
+        emotion=emotion,
         category="음악",
         top_k=2
     )
 
     selected_food = get_smart_recommendation(
         user_text=request.diary,
-        emotion=opposite_emotion,
+        emotion=emotion,
         category="식사",
         top_k=2
     )
@@ -201,7 +219,7 @@ async def analyze_diary(request: DiaryRequest):
 
     return {
         "emotion": emotion,
-        "opposite_emotion": opposite_emotion,
+        "emotion": emotion,
         "message": message,
         "books": selected_books,
         "music": selected_music,

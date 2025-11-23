@@ -1,6 +1,35 @@
+# requirements.txt
+
+# Web Framework
 fastapi
 uvicorn[standard]
+
+# Database - Relational (MySQL)
+SQLAlchemy
+pymysql
+
+# Database - Vector
+chromadb
 faiss-cpu
-numpy
+
+# Validation & Configuration
+pydantic
+pydantic[email]
+pydantic-settings
 python-dotenv
+
+# Authentication & Security
+passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
+python-jose[cryptography]
+python-multipart
+
+# AI & ML
 openai
+google-generativeai
+numpy
+langchain 
+sentence-transformers
+langchain-community
+langchain-huggingface
+langchain-openai
