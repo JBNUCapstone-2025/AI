@@ -5,6 +5,7 @@ import numpy as np
 import os
 import sys
 from typing import List, Dict
+from ai_core.vector_db.vector_db import get_recommendation_by_emotion
 
 # 프로젝트 루트를 sys.path에 추가
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -111,11 +112,14 @@ def get_smart_recommendation(
     사용자 입력과 가장 관련성 높은 콘텐츠를 추천합니다.
     """
     # 1. 감정에 맞는 콘텐츠 풀 가져오기
-    contents = get_recommendation_data(emotion, category)
+    # vector_db.py
+    # emotion_query(감정), conversation(대화)
+    contents = get_recommendation_by_emotion(emotion, user_text, top_k)
 
     if not contents:
         return []
 
+    '''
     # 2. 사용자 입력과의 유사도 기반으로 랭킹
     ranked_contents = rank_contents_by_similarity(
         user_text=user_text,
@@ -123,5 +127,6 @@ def get_smart_recommendation(
         category=category,
         top_k=top_k
     )
+    '''
 
-    return ranked_contents
+    return contents
