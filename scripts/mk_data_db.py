@@ -1,8 +1,9 @@
 import os
 import json 
 from langchain_core.documents import Document
-from langchain_community.vectorstores import FAISS
+from langchain_chroma import Chroma
 from ai_core.llm.llm_utils import embedding_model
+import shutil
 
 # 벡터db 생성 및 저장
 
@@ -10,7 +11,7 @@ from ai_core.llm.llm_utils import embedding_model
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 JSON_DIR = os.path.join(BASE_DIR, "data2")
-VECTORDB_DIR = os.path.join(BASE_DIR, "ai_core", "vector_db", "emotion_vectordb")
+VECTORDB_DIR = os.path.join(BASE_DIR, "ai_core", "vector_db", "chroma_vectordb")
 
 def load_book_docs_from_dir(directory: str) -> list[Document]:
     docs = []
@@ -50,8 +51,8 @@ def load_book_docs_from_dir(directory: str) -> list[Document]:
                             "publisher": item["publisher"],
                             "subtitle": item.get("subtitle", ""),
                             "detail_url": item["detail_url"],
-                            "tags": item.get("tags", []),
-                            "emotion_group": emotion_group,  # ⭐ 추가된 부분
+                            "tags": tags,
+                            "emotion_group": emotion_group,  
                         },
                     )
                 )
@@ -59,11 +60,15 @@ def load_book_docs_from_dir(directory: str) -> list[Document]:
     return docs
 
 def build_vectordb(docs):
+    
+    # shutil.rmtree(VECTORDB_DIR)
+    os.makedirs(VECTORDB_DIR, exist_ok=True)
 
     # VectorDB 생성
-    vectordb = FAISS.from_documents(docs, embedding_model)
-    vectordb.save_local(VECTORDB_DIR)
-    print(f"VectorDB 생성 완료: {VECTORDB_DIR}")
+    vectordb = Chroma(embedding_function = embedding_model, persist_directory = VECTORDB_DIR)
+    vectordb.add_documents(docs)
+
+    print(f"Chroma VectorDB 생성 완료: {VECTORDB_DIR}")
     
     return vectordb
 
@@ -77,4 +82,6 @@ if __name__ == "__main__":
         print("📌 DEBUG: sample doc =", docs[0])
     vectordb = build_vectordb(docs)
 
-    
+# ===============================================
+test_docs = vectordb.similarity_search("너무 화가나고 기분이 안좋아. 왜케 나를 화나게 하는걸까?", k=1)
+print("TEST 결과 : ", test_docs)

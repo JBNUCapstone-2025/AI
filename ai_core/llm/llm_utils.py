@@ -71,7 +71,6 @@ def get_embedding(text):
         print(f"임베딩 생성 중 오류 발생: {e}")
         return None
 
-
 # 🔹 감정 추출 함수 (main.py)
 def extract_emotion(user_input: str) -> str:
     prompt = f"""

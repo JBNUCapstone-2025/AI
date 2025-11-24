@@ -1,9 +1,9 @@
 import pickle
 import random
 import numpy as np
-import faiss
 import os
-from langchain_community.vectorstores import FAISS
+import faiss
+from langchain_chroma import Chroma
 from ai_core.llm.llm_utils import embedding_model
 from typing import List, Dict, Any
 from langchain_core.documents import Document
@@ -11,47 +11,103 @@ from langchain_core.documents import Document
 # 데이터 파일 경로 설정
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, "data")
+VECTORDB_DIR = os.path.join(BASE_DIR, "ai_core", "vector_db", "chroma_vectordb")
 
 # 기쁨, 설렘, 보통, 슬픔, 불안, 분노
 
 
-# 랭체인 기반 벡터db (faiss) 💕
-# Faiss 인덱스와 감정 데이터 로드
+# 랭체인 기반 벡터db (Chroma) 
 try:
-    vectordb = FAISS.load_local("ai_core/vector_db/emotion_vectordb", embedding_model, allow_dangerous_deserialization = True)
+    vectordb = Chroma(
+        persist_directory = VECTORDB_DIR,
+        embedding_function = embedding_model,
+    )
+
+    print("VECTORDB_DIR:", VECTORDB_DIR)
+    print("FILES:", os.listdir(VECTORDB_DIR))
+    print("INDEX EXISTS:", os.path.exists(os.path.join(VECTORDB_DIR, "index")))
 
     IS_DB_READY = True
 
-    print("벡터 DB가 성공적으로 로드되었습니다.")
+    print("Chroma 벡터 DB가 성공적으로 로드되었습니다.")
+
+    try:
+        total = vectordb._collection.count()
+        print(f"📌 DEBUG: Chroma 컬렉션 문서 개수 = {total}")
+        sample = vectordb.similarity_search("테스트", k=1)
+        print("📌 DEBUG: 샘플 검색 결과 =", sample)
+    except Exception as inner_e:
+        print("📌 DEBUG: vectordb 상태 확인 중 에러:", inner_e)
 
     with open(os.path.join(DATA_DIR, "emotion_data.pkl"), "rb") as f:
         db_data = pickle.load(f)
+
     EMOTIONS = db_data["emotions"]
     EMOTION_DATA = db_data["data"]
  
 except Exception as e:
     vectordb = None
     IS_DB_READY = False
-    print("오류: vectordb(langchain-faiss)를 찾을 수 없습니다. 먼저 mk_data_db.py를 실행하여 벡터DB를 생성해주세요.")
+    print("오류: Chroma 벡터db를 찾을 수 없습니다. 먼저 mk_data_db.py를 실행하여 벡터DB를 생성해주세요.")
     print(f"상세 오류: {e}")
 
 
-# 예시 검색 함수
+EMOTION_GROUP: Dict[str, str] = {
+    "기쁨": "joy",
+    "설렘": "excitement",
+    "보통": "normal",
+    "슬픔": "sadness",
+    "분노": "anger",
+    "불안": "anxiety",
+}
+
+
+# 검색 함수
 # 감정, 대화내용에 대한 관련 문서 추천
+# (main.py) recent_emotion, conversation, k=3
 def get_recommendation_by_emotion(emotion_query: str, conversation: str = "", k: int = 3)-> List[Document]:
     
     if not IS_DB_READY:
         raise RuntimeError("벡터DB가 준비되지 않았습니다.")
-    
-    query = f"현재 감정 : {emotion_query}\n 사용자 대화 내용 : {conversation}"
+
+    emotion_group = EMOTION_GROUP.get(emotion_query, emotion_query)
+
+    # 검색 
+    if conversation.strip():
+        query = conversation
+        print("query : ",query)
+
+        docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion_group":emotion_group})
+    else:
+        query = emotion_group
+        print("query : ", query)
+
+        docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion_group":emotion_group})
+        docs = random.shuffle(docs)
+
+
+    # query = conversation if conversation.strip() else emotion_group
+    # print("query : ", query)
 
     # query와 유사한 문서 찾기 (rag)
-    docs : List[Document] = vectordb.similarity_search(query, k=k)
+    # docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion_group":emotion_group})
 
-    results: List[Document]
-    results = vectordb.similarity_search(emotion_query, k=k)
+    print(f"📌 DEBUG: emotion_query={emotion_query}, emotion_group={emotion_group}, 결과 개수={len(docs)}")
 
-    return results
+    # random.shuffle(docs)
+    
+    '''
+    filtered = []
+    for i in docs:
+            if i.metadata.get("emotion_group") == emotion_query:
+                filtered.append(i)
+            else:
+                filtered = docs
+    
+    random.shuffle(filtered)
+    '''
+
+    return docs
 
 
 

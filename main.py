@@ -122,11 +122,12 @@ async def recommend(request: RecommendRequest):
 
     # 최근 감정 추출 (여러 감정이 있을 경우 가장 최근 것 선택) (llm_utils.py)
     recent_emotion = extract_recent_emotion(conversation)
+    print("최근 감정 : ", recent_emotion)
 
     # rag
     # 기분과 대화에 따른 추천 (3개)(vector_db.py)
-
     selected = get_recommendation_by_emotion(recent_emotion, conversation, k=3)
+    print(selected)
 
     if not selected:
         return {
