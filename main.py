@@ -56,6 +56,7 @@ class DiaryRequest(BaseModel):
     diary: str
     class_type: str = "일반"
 
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     """
@@ -119,14 +120,21 @@ async def recommend(request: RecommendRequest):
     
     # 1. 전체 대화에서 최근 감정 추출
     conversation = request.conversation_history or "평범한 하루"
+    category = request.type
 
     # 최근 감정 추출 (여러 감정이 있을 경우 가장 최근 것 선택) (llm_utils.py)
     recent_emotion = extract_recent_emotion(conversation)
     print("최근 감정 : ", recent_emotion)
 
+
     # rag
     # 기분과 대화에 따른 추천 (3개)(vector_db.py)
-    selected = get_recommendation_by_emotion(recent_emotion, conversation, k=3)
+    selected = get_recommendation_by_emotion(
+        emotion_query = recent_emotion,
+        conversation =  conversation, 
+        category = category, 
+        k=3)
+    
     print(selected)
 
     if not selected:
@@ -173,10 +181,12 @@ async def analyze_diary(request: DiaryRequest):
     """
 
     # 1. 감정 추출
+    # 다이어리 내용 (str)로 감정 추출
     emotion = extract_emotion(request.diary)
 
     # 2. 감정 임베딩 생성 후 벡터 DB에서 반대 감정 찾기
     emotion_vector = get_embedding(emotion)
+
     if emotion_vector is None:
         return {"error": "감정 분석에 실패했습니다."}
 
@@ -209,11 +219,12 @@ async def analyze_diary(request: DiaryRequest):
 
     # 4. 감정에 따른 메시지 생성
     emotion_messages = {
-        "행복": "오늘 정말 좋은 하루를 보내셨네요! 이 기분을 더 오래 간직할 수 있는 콘텐츠를 추천해드려요.",
-        "슬픔": "힘든 하루였군요. 위로가 되는 콘텐츠로 마음을 다독여보세요.",
-        "분노": "화가 많이 나셨나봐요. 스트레스를 해소할 수 있는 콘텐츠를 준비했어요.",
-        "평온": "평온한 하루를 보내셨네요. 이 평화로움을 유지할 수 있는 콘텐츠예요.",
-        "불안": "불안한 마음이 느껴지네요. 마음을 진정시킬 수 있는 콘텐츠를 추천드려요."
+        "기쁨": "오늘 정말 행복한 하루를 보내셨네요! 이 좋은 기분을 더 오래 간직할 수 있는 콘텐츠를 추천해드릴게요.",
+        "설렘": "두근거리는 하루였군요! 이 설레는 마음이 더 풍성해질 수 있도록 잘 어울리는 콘텐츠를 골라봤어요.",
+        "보통": "무난하고 평온한 하루였네요. 지금의 안정된 기분을 부드럽게 이어갈 수 있는 콘텐츠를 추천해드릴게요.",
+        "슬픔": "마음이 조금 무거운 하루였겠어요. 조금이라도 위로가 되는 따뜻한 콘텐츠를 준비했어요.",
+        "분노": "많이 답답하고 화가 나는 일이 있었나봐요. 마음을 풀고 스트레스를 덜어낼 수 있는 콘텐츠를 추천해드릴게요.",
+        "불안": "불안한 마음이 느껴져요. 긴장을 조금 내려놓고 마음이 편안해질 수 있는 콘텐츠를 골라드릴게요."
     }
 
     message = emotion_messages.get(emotion, "오늘 하루의 감정을 바탕으로 추천을 준비했어요.")

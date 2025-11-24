@@ -2,7 +2,10 @@
 import random
 import os
 import sys
-from typing import Dict, List
+from typing import Dict, List, Any, Literal
+from langchain_core.documents import Document
+from ai_core.llm.llm_utils import embedding_model
+import json
 
 # 프로젝트 루트를 sys.path에 추가
 # os.path.abspath(_file_) : 이 파일의 절대 경로를 구함.
@@ -69,6 +72,46 @@ def get_rag_recommendation(conversation_history: str, category: str) -> Dict:
         "all_recommendations": recommendations[:3]  # 상위 3개 반환
     }
 '''
+def build_item_candidates(docs: List[Document], category: Literal["도서", "음악"],) -> List[Dict[str, Any]]:
+    candidates = List[Dict[str, Any]] = []
+
+    for doc in docs:
+        payload = json.loads(doc.page_content)
+        emotion = payload.get("emotion")
+        emotion_kr = payload.get("emotion_kr")
+
+        if category == "도서":
+            for b in payload.get("books", []):
+                candidates.append({
+                    "type": "book",
+                    "emotion": emotion,
+                    "emotion_kr": emotion_kr,
+                    "title": b.get("title", ""),
+                    "author": b.get("author", ""),
+                    "publisher": b.get("publisher", ""),
+                    "subtitle": b.get("subtitle", ""),
+                    "detail_url": b.get("detail_url", ""),
+                    "cover_image_url": b.get("cover_image_url", ""),
+                    "price": b.get("price", ""),
+                    "tags": b.get("tags", []),
+                })
+        elif category == "음악":
+            for m in payload.get("music", []):
+                candidates.append({
+                    "type": "music",
+                    "emotion": emotion,
+                    "emotion_kr": emotion_kr,
+                    "title": m.get("title", ""),
+                    "artist": m.get("artist", ""),
+                    "album": m.get("album", ""),
+                    "genre": m.get("genre", ""),
+                    "detail_url": m.get("detail_url", ""),
+                    "cover_image_url": m.get("cover_url", ""),
+                    "dj_tags": m.get("dj_tags", []),
+                })
+
+    return candidates
+
 
 # 도서 
 def format_book_recommendation(data: Dict) -> str:
@@ -98,21 +141,21 @@ def format_book_recommendation(data: Dict) -> str:
 def format_music_recommendation(data: Dict) -> str:
     """음악 추천 정보를 포맷팅합니다."""
     rec = data["recommendation"]
-    title = rec.get("title", "")
-    artist = rec.get("artist", "")
-    description = rec.get("description", "")
+    title = rec.metadata.get("title", "")
+    artist = rec.metadata.get("artist", "")
+    album = rec.metadata.get("album", "")
 
     result = f"🎵 {title}"
     if artist:
         result += f"\n아티스트: {artist}"
-    if description:
-        result += f"\n{description}"
+    if album:
+        result += f"\n{album}"
 
     # 추가 추천도 포함
     if "all_recommendations" in data and len(data["all_recommendations"]) > 1:
         result += "\n\n다른 추천곡:"
         for music in data["all_recommendations"][1:]:
-            result += f"\n• {music.get('title', '')} - {music.get('artist', '')}"
+            result += f"\n• {music.metadata.get('title', '')} - {music.metadata.get('artist', '')}"
 
     return result
 

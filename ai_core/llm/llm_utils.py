@@ -38,6 +38,9 @@ embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/paraph
 # 랭체인 chatopenai
 
 llm = ChatOpenAI(
+    model = "gpt-4o-mini"
+)
+empathetic_llm = ChatOpenAI(
     model = "gpt-4o-mini",
     temperature = 0.8
 )
@@ -45,13 +48,13 @@ llm = ChatOpenAI(
 # extract_recent_emotion()
 recent_emotion_llm = ChatOpenAI(
     model = "gpt-4o-mini",
-    temperature = 0.3,
+    temperature = 0.3
 )
 
 # generate_recommendation_response()
 recommend_llm = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0.7,
+    temperature=0.7
 )
 
 # ==================================================
@@ -71,25 +74,25 @@ def get_embedding(text):
         print(f"임베딩 생성 중 오류 발생: {e}")
         return None
 
+# ===================================================
+
 # 🔹 감정 추출 함수 (main.py)
 def extract_emotion(user_input: str) -> str:
-    prompt = f"""
-    다음 문장에서 가장 두드러지는 핵심 감정 한 가지를
-    '기쁨', '설렘', '보통', '분노', '슬픔', '불안' 중에서 하나만 골라주세요.
-    다른 설명 없이 감정 단어만 응답해야 합니다.
+    
+    messages = [("user", f"""
+        다음 문장에서 가장 두드러지는 핵심 감정 한 가지를
+        '기쁨', '설렘', '보통', '분노', '슬픔', '불안' 중에서 하나만 골라주세요.
+        다른 설명 없이 감정 단어만 응답해야 합니다.
 
-    문장: "{user_input}"
-    감정:
-    """
+        문장: "{user_input}"
+        감정:
+        """)]
+    
     try: 
         # open ai의 clint 사용 -> 채팅 completions api 호출
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", # 사용 모데 지정 
-            # 유저 메세지로 프롬프트 전달 
-            messages=[{"role": "user", "content": prompt}]
-        )
-        # 모델이 준 응답을 반환
-        return response.choices[0].message.content.strip()
+        response = llm.invoke(messages)
+      
+        return response.content.strip()
     
     except Exception as e:
         print(f"감정 추출 중 오류 발생: {e}")
@@ -251,9 +254,6 @@ def to_langchain_history(chat_history: List[Dict]) -> List[BaseMessage]:
     return langchain_messge
 
 # =============================================
-
-# generate_empathetic_response() llm 
-empathetic_llm = llm
 
 # 프롬프트
 empathetic_prompt = ChatPromptTemplate.from_messages([

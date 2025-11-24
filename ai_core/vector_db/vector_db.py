@@ -5,8 +5,9 @@ import os
 import faiss
 from langchain_chroma import Chroma
 from ai_core.llm.llm_utils import embedding_model
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Literal
 from langchain_core.documents import Document
+import json
 
 # 데이터 파일 경로 설정
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,30 +62,147 @@ EMOTION_GROUP: Dict[str, str] = {
     "불안": "anxiety",
 }
 
+def build_item_candidates(docs: List[Document], category: Literal["도서", "음악"],) -> List[Dict[str, Any]]:
+    candidates = List[Dict[str, Any]] = []
+
+    for doc in docs:
+        payload = json.loads(doc.page_content)
+        emotion = payload.get("emotion")
+        emotion_kr = payload.get("emotion_kr")
+
+        if category == "도서":
+            for b in payload.get("books", []):
+                candidates.append({
+                    "type": "book",
+                    "emotion": emotion,
+                    "emotion_kr": emotion_kr,
+                    "title": b.get("title", ""),
+                    "author": b.get("author", ""),
+                    "publisher": b.get("publisher", ""),
+                    "subtitle": b.get("subtitle", ""),
+                    "detail_url": b.get("detail_url", ""),
+                    "cover_image_url": b.get("cover_image_url", ""),
+                    "price": b.get("price", ""),
+                    "tags": b.get("tags", []),
+                })
+        elif category == "음악":
+            for m in payload.get("music", []):
+                candidates.append({
+                    "type": "music",
+                    "emotion": emotion,
+                    "emotion_kr": emotion_kr,
+                    "title": m.get("title", ""),
+                    "artist": m.get("artist", ""),
+                    "album": m.get("album", ""),
+                    "genre": m.get("genre", ""),
+                    "detail_url": m.get("detail_url", ""),
+                    "cover_image_url": m.get("cover_url", ""),
+                    "dj_tags": m.get("dj_tags", []),
+                })
+
+    return candidates
+
+
+def rank_items_by_similarity(
+        conversation: str, candidates: List[Dict[str, Any]],
+        k: int = 3,
+) -> List[Dict[str, Any]]:
+    
+    if not candidates:
+        return []
+    
+    texts = []
+
+    for c in candidates:
+        if c["type"] == "book":
+            t = f"""
+            책 제목: {c.get('title', '')}
+            부제: {c.get('subtitle', '')}
+            저자: {c.get('author', '')}
+            출판사: {c.get('publisher', '')}
+            태그: {', '.join(c.get('tags', []))}
+            """
+        else:
+            t = f"""
+            곡 제목: {c.get('title', '')}
+            아티스트: {c.get('artist', '')}
+            앨범: {c.get('album', '')}
+            장르: {c.get('genre', '')}
+            태그: {', '.join(c.get('dj_tags', []))}
+            """
+        texts.append(t)
+
+    emb_inputs = [conversation] + texts
+    embs = embedding_model.embed_documents(emb_inputs)
+
+def get_payload_by_emotion(emotion_query: str)->Dict[str,Any] | None:
+    docs: List[Document] = vectordb.similarity_search(emotion_query, k=1, filter = {"emotion_kr": emotion_query},)
+
+    if not docs:
+        return None
+    
+    doc = docs[0]
+    payload = json.loads(doc.page_content)
+
+    return payload
+
+
+CATEGORY: Dict[str, str] = {
+    "도서": "book",
+    "음악": "music",
+    "음식": "food",
+}
 
 # 검색 함수
 # 감정, 대화내용에 대한 관련 문서 추천
 # (main.py) recent_emotion, conversation, k=3
-def get_recommendation_by_emotion(emotion_query: str, conversation: str = "", k: int = 3)-> List[Document]:
+def get_recommendation_by_emotion(emotion_query: str, conversation: str = "", category:str = "", k: int = 3)-> List[Document]:
     
     if not IS_DB_READY:
         raise RuntimeError("벡터DB가 준비되지 않았습니다.")
 
-    emotion_group = EMOTION_GROUP.get(emotion_query, emotion_query)
+    # emotion_group = EMOTION_GROUP.get(emotion_query, emotion_query)
+    
+    query = conversation.strip() or emotion_query
 
+    filter_dict: Dict[str, Any] = {}
+
+    if emotion_query:
+        filter_dict["emotion_kr"] = emotion_query  # 예: "불안"
+
+    if category:
+        filter_dict["category"] = category         # 예: "도서" / "음악"
+
+    print("📌 DEBUG filter:", filter_dict)
+    
+    where = {
+        "$and": [
+        {"emotion_kr": {"$eq": emotion_query}},
+        {"category": {"$eq": category}},
+        ]
+    }
+
+    docs = vectordb.similarity_search(
+        query, 
+        k=k, 
+        filter= where,
+    )
+
+    
+    '''
     # 검색 
     if conversation.strip():
         query = conversation
         print("query : ",query)
 
-        docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion_group":emotion_group})
+        docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion":emotion_query})
     else:
-        query = emotion_group
+        query = emotion_query 
         print("query : ", query)
 
-        docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion_group":emotion_group})
+        docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion":emotion_query})
         docs = random.shuffle(docs)
-
+    '''
 
     # query = conversation if conversation.strip() else emotion_group
     # print("query : ", query)
@@ -92,7 +210,7 @@ def get_recommendation_by_emotion(emotion_query: str, conversation: str = "", k:
     # query와 유사한 문서 찾기 (rag)
     # docs : List[Document] = vectordb.similarity_search(query, k=10, filter={"emotion_group":emotion_group})
 
-    print(f"📌 DEBUG: emotion_query={emotion_query}, emotion_group={emotion_group}, 결과 개수={len(docs)}")
+    print(f"📌 DEBUG: emotion_query={emotion_query}, category = {category}, 결과 개수={len(docs)}")
 
     # random.shuffle(docs)
     
