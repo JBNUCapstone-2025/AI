@@ -149,7 +149,7 @@ def extract_recent_emotion(conversation_history: str) -> str:
         return "보통"
     
     # 유효한 감정인지 확인
-    valid_emotions = ["기쁨", "설렘", "보통", "슬픔" "분노", "불안"]
+    valid_emotions = ["기쁨", "설렘", "보통", "슬픔", "분노", "불안"]
 
     try:
         response = recent_emotion_chain.invoke({
