@@ -103,55 +103,6 @@ def build_item_candidates(docs: List[Document], category: Literal["도서", "음
     return candidates
 
 
-def rank_items_by_similarity(
-        conversation: str, candidates: List[Dict[str, Any]],
-        k: int = 3,
-) -> List[Dict[str, Any]]:
-    
-    if not candidates:
-        return []
-    
-    texts = []
-
-    for c in candidates:
-        if c["type"] == "book":
-            t = f"""
-            책 제목: {c.get('title', '')}
-            부제: {c.get('subtitle', '')}
-            저자: {c.get('author', '')}
-            출판사: {c.get('publisher', '')}
-            태그: {', '.join(c.get('tags', []))}
-            """
-        else:
-            t = f"""
-            곡 제목: {c.get('title', '')}
-            아티스트: {c.get('artist', '')}
-            앨범: {c.get('album', '')}
-            장르: {c.get('genre', '')}
-            태그: {', '.join(c.get('dj_tags', []))}
-            """
-        texts.append(t)
-
-    emb_inputs = [conversation] + texts
-    embs = embedding_model.embed_documents(emb_inputs)
-
-def get_payload_by_emotion(emotion_query: str)->Dict[str,Any] | None:
-    docs: List[Document] = vectordb.similarity_search(emotion_query, k=1, filter = {"emotion_kr": emotion_query},)
-
-    if not docs:
-        return None
-    
-    doc = docs[0]
-    payload = json.loads(doc.page_content)
-
-    return payload
-
-
-CATEGORY: Dict[str, str] = {
-    "도서": "book",
-    "음악": "music",
-    "음식": "food",
-}
 
 # 검색 함수
 # 감정, 대화내용에 대한 관련 문서 추천
@@ -187,7 +138,6 @@ def get_recommendation_by_emotion(emotion_query: str, conversation: str = "", ca
         k=k, 
         filter= where,
     )
-
     
     '''
     # 검색 

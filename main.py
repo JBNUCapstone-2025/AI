@@ -53,8 +53,9 @@ class RecommendRequest(BaseModel):
     conversation_history: str = ""
 
 class DiaryRequest(BaseModel):
+    type: str
     diary: str
-    class_type: str = "일반"
+   
 
 
 @app.post("/api/chat")
@@ -179,44 +180,41 @@ async def analyze_diary(request: DiaryRequest):
     2. 감정 벡터를 만들어 반대 감정 찾기
     3. 일기 내용과 가장 관련성 높은 콘텐츠를 의미 기반으로 추천
     """
+    # DiaryRequest
+    # class DiaryRequest(BaseModel):
+    # type: str (도서, 음악, 음식 )
+    # diary: str (일기 내용 )
+    # class_type: str = "일반"
+
 
     # 1. 감정 추출
     # 다이어리 내용 (str)로 감정 추출
     emotion = extract_emotion(request.diary)
 
-    # 2. 감정 임베딩 생성 후 벡터 DB에서 반대 감정 찾기
-    emotion_vector = get_embedding(emotion)
+    print("감정 : ", emotion)
 
-    if emotion_vector is None:
-        return {"error": "감정 분석에 실패했습니다."}
+    # 추천
+    selected = get_recommendation_by_emotion(emotion, request.diary, request.type, k=3)
 
-    # opposite_emotion = find_dissimilar_emotion_key(emotion_vector)
+    print("추천 목록 : ", selected)
 
-    # 3. 의미 기반 스마트 추천
-    from ai_core.recommendation import get_smart_recommendation
+    # 추천 목록 없으면 
+    if not selected:
+        return {
+            "answer": f"{request.type} 추천 데이터가 없습니다.",
+            "recommendation_data": {"error": "데이터 없음"}
+        }
 
-    # 일기 내용과 가장 관련성 높은 콘텐츠 추천
-    selected_books = get_smart_recommendation(
-        user_text=request.diary,
-        emotion=emotion,
-        category="도서",
-        top_k=2
-    )
+    recommendation_data = {
+        "category": request.type,
+        "emotion": emotion,
+        "recommendation": selected[0],
+        "all_recommendations": selected,
+    }
 
-    selected_music = get_smart_recommendation(
-        user_text=request.diary,
-        emotion=emotion,
-        category="음악",
-        top_k=2
-    )
+    # formatted_rec = format_recommendation(request.type, recommendation_data)
 
-    selected_food = get_smart_recommendation(
-        user_text=request.diary,
-        emotion=emotion,
-        category="식사",
-        top_k=2
-    )
-
+   
     # 4. 감정에 따른 메시지 생성
     emotion_messages = {
         "기쁨": "오늘 정말 행복한 하루를 보내셨네요! 이 좋은 기분을 더 오래 간직할 수 있는 콘텐츠를 추천해드릴게요.",
@@ -229,13 +227,12 @@ async def analyze_diary(request: DiaryRequest):
 
     message = emotion_messages.get(emotion, "오늘 하루의 감정을 바탕으로 추천을 준비했어요.")
 
+    print("message : ", message)
+
     return {
         "emotion": emotion,
-        "emotion": emotion,
         "message": message,
-        "books": selected_books,
-        "music": selected_music,
-        "food": selected_food
+        "recommendation": recommendation_data
     }
 
 
