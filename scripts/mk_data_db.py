@@ -85,6 +85,34 @@ def load_book_docs_from_dir(directory: str) -> list[Document]:
                 
                 docs.append(Document(page_content = page_content, metadata = metadata))
 
+            for food in payload.get("foods", []):
+                page_content = f"""
+                [FOOD]
+
+                감정: {emotion_kr} ({emotion})
+
+                식당 이름: {food.get('name')}
+                메뉴: {food.get('menu', '')}
+                별점: {food.get('scope', '')}
+                """.strip()
+
+                metadata = {
+                    "emotion": emotion,
+                    "emotion_kr": emotion_kr,
+                    "category": "음식",
+                    "name": food.get("name", ""),
+                    "menu": food.get("menu", ""),
+                    "position": food.get("position", ""),
+                    "latitude": food.get("latitude", ""),
+                    "longitude": food.get("longitude", ""),
+                    "time": food.get("time", ""),
+                    "scope": food.get("scope", "")
+                }
+
+                docs.append(Document(page_content = page_content, metadata = metadata))
+
+
+                
     return docs
 
         
